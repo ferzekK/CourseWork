@@ -159,11 +159,11 @@ def run_k_experiment():
     k_values = read_range("K")
     repeat_count = read_int("Введіть кількість повторів для усереднення: ", 1)
 
-    title = "Дослідження впливу кількості ітерацій K на час"
+    title = "Дослідження впливу кількості ітерацій K на час та точність"
     print_experiment_start(title, "K", {"n": n, "m": m, "Кількість повторів": repeat_count})
 
     rows = collect_rows("K", k_values, n, m, 0, repeat_count)
-    plot_time_by_k(rows)
+    plot_k_experiment(rows)
 
 
 def run_m_accuracy_experiment():
@@ -221,18 +221,29 @@ def plot_accuracy_by_m(rows):
     )
 
 
-def plot_time_by_k(rows):
+def plot_k_experiment(rows):
     import matplotlib.pyplot as plt
 
     k_values = get_values(rows, "K")
     time_local_values = get_values(rows, "time_local")
+    f_local_values = get_values(rows, "F_local")
 
-    plt.figure()
-    plt.plot(k_values, time_local_values, marker="o")
-    plt.title("Залежність часу роботи локального пошуку від K")
-    plt.xlabel("K")
-    plt.ylabel("Час роботи, с")
-    plt.grid(True)
+    figure, axes = plt.subplots(1, 2, figsize=(12, 5))
+
+    axes[0].plot(k_values, time_local_values, marker="o")
+    axes[0].set_title("Час локального пошуку від K")
+    axes[0].set_xlabel("K")
+    axes[0].set_ylabel("Час роботи, с")
+    axes[0].grid(True)
+
+    axes[1].plot(k_values, f_local_values, marker="o")
+    axes[1].set_title("Точність локального пошуку від K")
+    axes[1].set_xlabel("K")
+    axes[1].set_ylabel("F local")
+    axes[1].grid(True)
+
+    figure.suptitle("Вплив кількості ітерацій K")
+    figure.tight_layout()
     plt.show()
 
 
@@ -268,8 +279,8 @@ def main():
         print("Оберіть експеримент:")
         print("1 - вплив кількості замовлень n на час")
         print("2 - вплив кількості контейнеровозів m на час")
-        print("3 - вплив кількості ітерацій K на час")
-        print("4 - вплив кількості контейнеровозів m на точність")
+        print("3 - вплив кількості контейнеровозів m на точність")
+        print("4 - вплив кількості ітерацій K на час та точність")
         print("0 - вихід")
 
         choice = input("Введіть число: ")
@@ -279,9 +290,9 @@ def main():
         elif choice == "2":
             run_m_experiment()
         elif choice == "3":
-            run_k_experiment()
-        elif choice == "4":
             run_m_accuracy_experiment()
+        elif choice == "4":
+            run_k_experiment()
         elif choice == "0":
             break
         else:
