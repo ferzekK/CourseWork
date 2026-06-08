@@ -23,8 +23,21 @@ def load_data_manual():
         orders.append(Order(i, t, d, w))
 
     if validate_data(orders, m):
+        file_name = input("Введіть назву файлу для запису введених даних: ")
+
+        if file_name == "":
+            file_name = DATA_FILE_NAME
+
+        saved = save_data_to_file(orders, m, file_name)
+
         print()
-        print("Нові дані задачі збережено успішно!")
+        print("Нові дані задачі введено успішно!")
+
+        if saved:
+            print("Введені дані записано у файл", file_name)
+        else:
+            print("Введені дані не записано у файл.")
+
         return orders, m
 
     print("Дані містять помилку. Перевірте їх та повторіть спробу.")
