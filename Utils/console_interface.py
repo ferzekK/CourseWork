@@ -139,7 +139,9 @@ def solve_local_search_menu(orders, greedy_result, current_local_search_result, 
         print("Спочатку потрібно розв'язати задачу жадібним алгоритмом.")
         return current_local_search_result, current_last_result
 
-    max_iterations = read_int("Введіть максимальну кількість ітерацій: ")
+    max_iterations = int(0.5 * len(orders))
+    print()
+    print("Максимальна кількість ітерацій K = int(0.5 * n) =", max_iterations)
     local_search_result, start_F, finish_reason = run_local_search_algorithm(greedy_result, orders, max_iterations)
 
     print()

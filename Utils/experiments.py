@@ -1,4 +1,8 @@
+import random
 import time
+
+import matplotlib.pyplot as plt
+import numpy as np
 
 from Algorithm.greedy_algorithm import solve_greedy
 from Algorithm.local_search_algorithm import solve_local_search
@@ -6,110 +10,208 @@ from Utils.data_handler import generate_orders
 from Utils.utils import read_int
 
 
-def read_range(parameter_name):
-    print("Вкажіть діапазон зміни " + parameter_name + ":")
-    lower = read_int("Введіть нижню межу " + parameter_name + ": ", 1)
+ALPHA_VALUES = [0.10, 0.20, 0.30, 0.4, 0.5, 0.6, 0.7]
+O_PERCENT_VALUES = [10, 30, 50, 70, 90, 100]
 
+DEFAULT_ALPHA_N = 80
+DEFAULT_ALPHA_REPEAT_COUNT = 3
+
+DEFAULT_O_N = 80
+DEFAULT_O_REPEAT_COUNT = 10
+O_MAX_ITERATIONS_COEFFICIENT = 0.5
+DEFAULT_COMPARE_REPEAT_COUNT = 10
+
+RANDOM_SEED = 42
+
+
+def read_float(message, min_value=0):
     while True:
-        upper = read_int("Введіть верхню межу " + parameter_name + ": ", 1)
+        try:
+            value = float(input(message).replace(",", "."))
 
-        if upper >= lower:
-            break
+            if value >= min_value:
+                return value
 
-        print("Введено некоректне значення. Спробуйте ще раз.")
-
-    step = read_int("Введіть крок зміни " + parameter_name + ": ", 1)
-
-    values = []
-    current = lower
-
-    while current <= upper:
-        values.append(current)
-        current = current + step
-
-    return values
+            print("Введено некоректне значення. Спробуйте ще раз.")
+        except ValueError:
+            print("Введено некоректне значення. Спробуйте ще раз.")
 
 
-def measure_time(func, *args):
+def read_int_list(message):
+    while True:
+        text = input(message)
+        parts = text.replace(";", ",").split(",")
+        values = []
+
+        try:
+            for part in parts:
+                value_text = part.strip()
+
+                if value_text != "":
+                    value = int(value_text)
+
+                    if value <= 0:
+                        values = []
+                        break
+
+                    values.append(value)
+
+            if len(values) > 0:
+                return values
+
+            print("Введено некоректне значення. Спробуйте ще раз.")
+        except ValueError:
+            print("Введено некоректне значення. Спробуйте ще раз.")
+
+
+def measure_time(func, *args, **kwargs):
     start_time = time.perf_counter()
-    result = func(*args)
+    result = func(*args, **kwargs)
     finish_time = time.perf_counter()
 
     return result, finish_time - start_time
 
 
-def run_single_test(orders, m, K):
-    greedy_data, time_greedy = measure_time(solve_greedy, orders, m)
-    greedy_result = greedy_data[0]
-
-    local_data, time_local = measure_time(solve_local_search, greedy_result, orders, K)
-    local_result = local_data[0]
-
-    improvement = greedy_result.F - local_result.F
-
-    if greedy_result.F != 0:
-        improvement_percent = improvement / greedy_result.F * 100
-    else:
-        improvement_percent = 0
-
-    return {
-        "F_greedy": greedy_result.F,
-        "F_local": local_result.F,
-        "time_greedy": time_greedy,
-        "time_local": time_local,
-        "improvement": improvement,
-        "improvement_percent": improvement_percent,
-    }
+def generate_initial_schedule(orders, m):
+    return solve_greedy(orders, m)[0]
 
 
-def average_results(results):
-    average = {}
-
-    for field in results[0]:
-        total = 0
-
-        for result in results:
-            total = total + result[field]
-
-        average[field] = total / len(results)
-
-    return average
+def calculate_truck_count(n, truck_percent):
+    return max(1, int(n * truck_percent / 100))
 
 
-def collect_rows(parameter_name, values, fixed_n, fixed_m, K, repeat_count):
+def run_local_search(orders, m, max_iterations, O_percent=None):
+    start_schedule = generate_initial_schedule(orders, m)
+    result, start_F, reason = solve_local_search(
+        start_schedule,
+        orders,
+        max_iterations=max_iterations,
+        O_percent=O_percent,
+    )
+
+    return result.F
+
+
+def get_seed(repeat):
+    return RANDOM_SEED + repeat
+
+
+def run_alpha_experiment(n=DEFAULT_ALPHA_N, repeat_count=DEFAULT_ALPHA_REPEAT_COUNT, truck_percent=None):
+    if truck_percent is None:
+        truck_percent = read_float("Введіть кількість контейнеровозів у відсотках від n: ", 0.0001)
+
+    m = calculate_truck_count(n, truck_percent)
     rows = []
 
-    for value in values:
-        if parameter_name == "n":
-            n = value
-            m = fixed_m
-        elif parameter_name == "m":
-            n = fixed_n
-            m = value
-        else:
-            n = fixed_n
-            m = fixed_m
-            K = value
+    print_experiment_start(
+        "Дослідження впливу кількості ітерацій на локальний пошук",
+        "alpha",
+        {"n": n, "m, % від n": truck_percent, "m": m, "r": repeat_count},
+    )
 
-        results = []
+    for alpha in ALPHA_VALUES:
+        pi = int(alpha * n)
+        f_values = []
 
         for repeat in range(1, repeat_count + 1):
-            if parameter_name == "K":
-                seed = repeat
-            else:
-                seed = value * 1000 + repeat
-
+            seed = get_seed(repeat)
+            random.seed(seed)
             orders = generate_orders(n, seed)
-            result = run_single_test(orders, m, K)
-            results.append(result)
+            F = run_local_search(orders, m, max_iterations=pi)
+            f_values.append(F)
 
-        average = average_results(results)
-        average["n"] = n
-        average["m"] = m
-        average["K"] = K
-        average["repeat_count"] = repeat_count
-        rows.append(average)
+        rows.append({
+            "pi": pi,
+            "F_avg": float(np.mean(f_values)),
+        })
 
+    plot_alpha_experiment(rows)
+    return rows
+
+
+def run_experiment(n=DEFAULT_O_N, truck_percent=10, r=DEFAULT_O_REPEAT_COUNT):
+    m = calculate_truck_count(n, truck_percent)
+    max_iterations = int(O_MAX_ITERATIONS_COEFFICIENT * n)
+    rows = []
+
+    print_experiment_start(
+        "Дослідження впливу розміру околу на локальний пошук",
+        "O_percent",
+        {"n": n, "m, % від n": truck_percent, "m": m, "r": r, "max_iterations": max_iterations},
+    )
+
+    for O_percent in O_PERCENT_VALUES:
+        f_values = []
+
+        for repeat in range(1, r + 1):
+            seed = get_seed(repeat)
+            random.seed(seed)
+            orders = generate_orders(n, seed)
+            F = run_local_search(
+                orders,
+                m,
+                max_iterations=max_iterations,
+                O_percent=O_percent,
+            )
+            f_values.append(F)
+
+        rows.append({
+            "O_percent": O_percent,
+            "F_avg": float(np.mean(f_values)),
+        })
+
+    plot_o_percent_experiment(rows)
+    return rows
+
+
+def run_algorithm_comparison_experiment(n_values, truck_percent, r=DEFAULT_COMPARE_REPEAT_COUNT):
+    rows = []
+
+    print_experiment_start(
+        "Порівняння жадібного алгоритму та локального пошуку",
+        "n",
+        {"m, % від n": truck_percent, "r": r, "max_iterations": "int(0.5 * n)"},
+    )
+
+    for n in n_values:
+        m = calculate_truck_count(n, truck_percent)
+        max_iterations = int(O_MAX_ITERATIONS_COEFFICIENT * n)
+        greedy_f_values = []
+        local_f_values = []
+        greedy_time_values = []
+        local_time_values = []
+
+        for repeat in range(1, r + 1):
+            seed = get_seed(repeat)
+            random.seed(seed)
+            orders = generate_orders(n, seed)
+
+            greedy_data, greedy_time = measure_time(solve_greedy, orders, m)
+            greedy_result = greedy_data[0]
+
+            local_data, local_time = measure_time(
+                solve_local_search,
+                greedy_result,
+                orders,
+                max_iterations,
+            )
+            local_result = local_data[0]
+
+            greedy_f_values.append(greedy_result.F)
+            local_f_values.append(local_result.F)
+            greedy_time_values.append(greedy_time)
+            local_time_values.append(local_time)
+
+        rows.append({
+            "n": n,
+            "m": m,
+            "F_greedy": float(np.mean(greedy_f_values)),
+            "F_local": float(np.mean(local_f_values)),
+            "time_greedy": float(np.mean(greedy_time_values)),
+            "time_local": float(np.mean(local_time_values)),
+        })
+
+    plot_algorithm_comparison_experiment(rows)
     return rows
 
 
@@ -127,141 +229,61 @@ def print_experiment_start(title, changed_parameter, fixed_values):
     print()
 
 
-def run_n_experiment():
-    n_values = read_range("n")
-    m = read_int("Введіть фіксовану кількість контейнеровозів m: ", 1)
-    K = read_int("Введіть фіксовану кількість ітерацій K: ", 1)
-    repeat_count = read_int("Введіть кількість повторів для усереднення: ", 1)
+def plot_alpha_experiment(rows):
+    pi_values = get_values(rows, "pi")
+    f_avg_values = get_values(rows, "F_avg")
 
-    title = "Дослідження впливу кількості замовлень n на час"
-    print_experiment_start(title, "n", {"m": m, "K": K, "Кількість повторів": repeat_count})
-
-    rows = collect_rows("n", n_values, None, m, K, repeat_count)
-    plot_time_by_n(rows)
-
-
-def run_m_experiment():
-    n = read_int("Введіть фіксовану кількість замовлень n: ", 1)
-    m_values = read_range("m")
-    K = read_int("Введіть фіксовану кількість ітерацій K: ", 1)
-    repeat_count = read_int("Введіть кількість повторів для усереднення: ", 1)
-
-    title = "Дослідження впливу кількості контейнеровозів m на час"
-    print_experiment_start(title, "m", {"n": n, "K": K, "Кількість повторів": repeat_count})
-
-    rows = collect_rows("m", m_values, n, None, K, repeat_count)
-    plot_time_by_m(rows)
-
-
-def run_k_experiment():
-    n = read_int("Введіть фіксовану кількість замовлень n: ", 1)
-    m = read_int("Введіть фіксовану кількість контейнеровозів m: ", 1)
-    k_values = read_range("K")
-    repeat_count = read_int("Введіть кількість повторів для усереднення: ", 1)
-
-    title = "Дослідження впливу кількості ітерацій K на час та точність"
-    print_experiment_start(title, "K", {"n": n, "m": m, "Кількість повторів": repeat_count})
-
-    rows = collect_rows("K", k_values, n, m, 0, repeat_count)
-    plot_k_experiment(rows)
-
-
-def run_m_accuracy_experiment():
-    n = read_int("Введіть фіксовану кількість замовлень n: ", 1)
-    m_values = read_range("m")
-    K = read_int("Введіть фіксовану кількість ітерацій K: ", 1)
-    repeat_count = read_int("Введіть кількість повторів для усереднення: ", 1)
-
-    title = "Дослідження впливу кількості контейнеровозів m на точність"
-    print_experiment_start(title, "m", {"n": n, "K": K, "Кількість повторів": repeat_count})
-
-    rows = collect_rows("m", m_values, n, None, K, repeat_count)
-    plot_accuracy_by_m(rows)
-
-
-def plot_time_by_n(rows):
-    plot_two_lines(
-        rows,
-        "n",
-        "time_greedy",
-        "time_local",
-        "greedy",
-        "local search",
-        "Порівняння часу роботи алгоритмів залежно від n",
-        "n",
-        "Час роботи, с",
-    )
-
-
-def plot_time_by_m(rows):
-    plot_two_lines(
-        rows,
-        "m",
-        "time_greedy",
-        "time_local",
-        "greedy",
-        "local search",
-        "Порівняння часу роботи алгоритмів залежно від m",
-        "m",
-        "Час роботи, с",
-    )
-
-
-def plot_accuracy_by_m(rows):
-    plot_two_lines(
-        rows,
-        "m",
-        "F_greedy",
-        "F_local",
-        "F greedy",
-        "F local",
-        "Порівняння точності алгоритмів залежно від m",
-        "m",
-        "F",
-    )
-
-
-def plot_k_experiment(rows):
-    import matplotlib.pyplot as plt
-
-    k_values = get_values(rows, "K")
-    time_local_values = get_values(rows, "time_local")
-    f_local_values = get_values(rows, "F_local")
-
-    figure, axes = plt.subplots(1, 2, figsize=(12, 5))
-
-    axes[0].plot(k_values, time_local_values, marker="o")
-    axes[0].set_title("Час локального пошуку від K")
-    axes[0].set_xlabel("K")
-    axes[0].set_ylabel("Час роботи, с")
-    axes[0].grid(True)
-
-    axes[1].plot(k_values, f_local_values, marker="o")
-    axes[1].set_title("Точність локального пошуку від K")
-    axes[1].set_xlabel("K")
-    axes[1].set_ylabel("F local")
-    axes[1].grid(True)
-
-    figure.suptitle("Вплив кількості ітерацій K")
-    figure.tight_layout()
+    plt.figure()
+    plt.plot(pi_values, f_avg_values, marker="o")
+    plt.title("F_avg by pi")
+    plt.xlabel("pi")
+    plt.ylabel("F_avg")
+    plt.grid(True)
+    plt.tight_layout()
     plt.show()
 
 
-def plot_two_lines(rows, x_field, first_field, second_field, first_label, second_label, title, x_label, y_label):
-    import matplotlib.pyplot as plt
-
-    x_values = get_values(rows, x_field)
-    first_values = get_values(rows, first_field)
-    second_values = get_values(rows, second_field)
+def plot_o_percent_experiment(rows):
+    O_percent_values = get_values(rows, "O_percent")
+    f_avg_values = get_values(rows, "F_avg")
 
     plt.figure()
-    plt.plot(x_values, first_values, marker="o", label=first_label)
-    plt.plot(x_values, second_values, marker="o", label=second_label)
-    plt.title(title)
-    plt.xlabel(x_label)
-    plt.ylabel(y_label)
+    plt.plot(O_percent_values, f_avg_values, marker="o")
+    plt.title("F_avg by O_percent")
+    plt.xlabel("O_percent")
+    plt.ylabel("F_avg")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
+
+
+def plot_algorithm_comparison_experiment(rows):
+    n_values = get_values(rows, "n")
+    greedy_time_values = get_values(rows, "time_greedy")
+    local_time_values = get_values(rows, "time_local")
+    greedy_f_values = get_values(rows, "F_greedy")
+    local_f_values = get_values(rows, "F_local")
+
+    plt.figure()
+    plt.plot(n_values, greedy_time_values, marker="o", label="greedy")
+    plt.plot(n_values, local_time_values, marker="o", label="local search")
+    plt.title("Algorithm time by n")
+    plt.xlabel("n")
+    plt.ylabel("time, s")
     plt.grid(True)
     plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+    plt.figure()
+    plt.plot(n_values, greedy_f_values, marker="o", label="greedy")
+    plt.plot(n_values, local_f_values, marker="o", label="local search")
+    plt.title("Objective function by n")
+    plt.xlabel("n")
+    plt.ylabel("F_avg")
+    plt.grid(True)
+    plt.legend()
+    plt.tight_layout()
     plt.show()
 
 
@@ -277,22 +299,28 @@ def get_values(rows, field_name):
 def main():
     while True:
         print("Оберіть експеримент:")
-        print("1 - вплив кількості замовлень n на час")
-        print("2 - вплив кількості контейнеровозів m на час")
-        print("3 - вплив кількості контейнеровозів m на точність")
-        print("4 - вплив кількості ітерацій K на час та точність")
+        print("1 - вплив коефіцієнта alpha на локальний пошук")
+        print("2 - вплив розміру околу на якість локального пошуку")
+        print("3 - порівняння жадібного алгоритму та локального пошуку")
         print("0 - вихід")
 
         choice = input("Введіть число: ")
 
         if choice == "1":
-            run_n_experiment()
+            n = read_int("Введіть кількість замовлень n: ", 1)
+            truck_percent = read_float("Введіть кількість машин у відсотках від n: ", 0.0001)
+            r = read_int("Введіть кількість повторів r: ", 1)
+            run_alpha_experiment(n=n, repeat_count=r, truck_percent=truck_percent)
         elif choice == "2":
-            run_m_experiment()
+            n = read_int("Введіть кількість замовлень n: ", 1)
+            truck_percent = read_float("Введіть кількість машин у відсотках від n: ", 0.0001)
+            r = read_int("Введіть кількість повторів r: ", 1)
+            run_experiment(n, truck_percent, r)
         elif choice == "3":
-            run_m_accuracy_experiment()
-        elif choice == "4":
-            run_k_experiment()
+            n_values = read_int_list("Введіть значення n через кому, наприклад 20,50,100,150: ")
+            truck_percent = read_float("Введіть кількість машин у відсотках від n: ", 0.0001)
+            r = read_int("Введіть кількість повторів r: ", 1)
+            run_algorithm_comparison_experiment(n_values, truck_percent, r)
         elif choice == "0":
             break
         else:
