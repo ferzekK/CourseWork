@@ -142,7 +142,12 @@ def solve_local_search_menu(orders, greedy_result, current_local_search_result, 
     max_iterations = int(0.5 * len(orders))
     print()
     print("Максимальна кількість ітерацій K = int(0.5 * n) =", max_iterations)
-    local_search_result, start_F, finish_reason = run_local_search_algorithm(greedy_result, orders, max_iterations)
+    local_search_result, start_F, finish_reason, f_history = run_local_search_algorithm(
+        greedy_result,
+        orders,
+        max_iterations,
+        return_history=True,
+    )
 
     print()
     print("Результат локального пошуку:")
@@ -153,8 +158,24 @@ def solve_local_search_menu(orders, greedy_result, current_local_search_result, 
     print("Розклад після локального пошуку:")
     print_schedule(local_search_result)
     print_details(local_search_result)
+    plot_local_search_history(f_history)
 
     return local_search_result, local_search_result
+
+
+def plot_local_search_history(f_history):
+    import matplotlib.pyplot as plt
+
+    iteration_values = list(range(len(f_history)))
+
+    plt.figure()
+    plt.plot(iteration_values, f_history, marker="o")
+    plt.title("F by local search iteration")
+    plt.xlabel("iteration")
+    plt.ylabel("F")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.show()
 
 
 def output_data_menu(orders, m, last_result):

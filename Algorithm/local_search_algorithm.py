@@ -2,11 +2,12 @@ from Models.models import Schedule, ScheduleResult
 import random
 
 
-def solve_local_search(start_schedule, orders, max_iterations, O_percent=None):
+def solve_local_search(start_schedule, orders, max_iterations, O_percent=None, return_history=False):
 
     current_schedule = copy_schedule(start_schedule.schedule)
     current_result = calculate_result(current_schedule, orders)
     start_F = current_result.F
+    f_history = [start_F]
 
     iteration = 0
     improvement = True
@@ -17,9 +18,9 @@ def solve_local_search(start_schedule, orders, max_iterations, O_percent=None):
 
         neighbors = generate_neighbors(current_schedule)
 
-        # =========================
+
         # ОБМЕЖЕННЯ ОКОЛУ (%)
-        # =========================
+
         if O_percent is not None:
             k = max(1, int(len(neighbors) * O_percent / 100))
             k = min(k, len(neighbors))
@@ -36,6 +37,8 @@ def solve_local_search(start_schedule, orders, max_iterations, O_percent=None):
                 improvement = True
                 break
 
+        f_history.append(current_result.F)
+
     if iteration >= max_iterations:
         finish_reason = "досягнуто максимальну кількість ітерацій"
     else:
@@ -43,12 +46,11 @@ def solve_local_search(start_schedule, orders, max_iterations, O_percent=None):
 
     current_result.algorithm_name = "Локальний пошук"
 
+    if return_history:
+        return current_result, start_F, finish_reason, f_history
+
     return current_result, start_F, finish_reason
 
-
-# =========================
-# ДАЛІ ТВОЇ ФУНКЦІЇ БЕЗ ЗМІН
-# =========================
 
 def copy_schedule(schedule):
     return [truck.copy() for truck in schedule]
